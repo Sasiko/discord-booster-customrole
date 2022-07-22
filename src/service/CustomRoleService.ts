@@ -1,26 +1,29 @@
-import {
-	ComponentInteraction,
-	Constants,
-	Guild,
-	ModalSubmitInteraction,
-	Role,
-} from "eris";
+import { ComponentInteraction, Constants, Guild, Role } from "eris";
 import {
 	CustomClient,
+	CustomCommandInteraction,
 	CustomModalSubmitInteraction,
 } from "../helpers/CustomClient";
-import { getErrorReply, getSuccessReply } from "../util/common.util";
+import { Colors, getErrorReply, getSuccessReply } from "../util/common.util";
 import { DatabaseService } from "./DatabaseService";
 import { request } from "undici";
 
 const prisma = DatabaseService.getClient();
 
 export class CustomRoleService {
-	public static async checkButtonClick(interaction: ComponentInteraction) {
-		if (
-			interaction.data.component_type !== Constants.ComponentTypes.BUTTON ||
-			!interaction.data.custom_id.startsWith("btn-customrole-")
-		) {
+	public static async checkButtonClick(
+		interaction: ComponentInteraction,
+		client: CustomClient
+	) {
+		if (interaction.data.component_type !== Constants.ComponentTypes.BUTTON) {
+			return;
+		}
+
+		if (interaction.data.custom_id === "btn-manage-custom-role") {
+			return this.showManageRoleEmbed(interaction, client);
+		}
+
+		if (!interaction.data.custom_id.startsWith("btn-customrole-")) {
 			return;
 		}
 
@@ -201,6 +204,88 @@ export class CustomRoleService {
 				guildID: guild.id,
 				roleID: role.id,
 			},
+		});
+	}
+
+	public static async showManageRoleEmbed(
+		interaction: CustomCommandInteraction | ComponentInteraction,
+		client: CustomClient
+	) {
+		if (
+			interaction instanceof ComponentInteraction &&
+			interaction.data.custom_id !== "btn-manage-custom-role"
+		) {
+			return;
+		}
+
+		await interaction.defer(64);
+
+		if (!interaction.guildID || !interaction.member) {
+			return interaction.editOriginalMessage(
+				getErrorReply("This command can only be used inside servers.")
+			);
+		}
+
+		const guild = client.guilds.get(interaction.guildID);
+
+		if (!guild) {
+			return interaction.editOriginalMessage(
+				getErrorReply("Failed to find the server.")
+			);
+		}
+
+		const boosterRole = await prisma.guildBoosterRole.findFirst({
+			where: { guildID: guild.id },
+		});
+
+		if (!boosterRole) {
+			return interaction.editOriginalMessage(
+				getErrorReply(
+					"This server doesn't have a booster role set. Please inform the server staff."
+				)
+			);
+		}
+
+		if (!interaction.member.roles.includes(boosterRole.roleID)) {
+			return interaction.editOriginalMessage(
+				getErrorReply(
+					`Sorry. Only members with <@&${boosterRole.roleID}> can manage custom roles.`
+				)
+			);
+		}
+
+		const memberCustomRole = await prisma.guildCustomRole.findFirst({
+			where: {
+				guildID: guild.id,
+				memberID: interaction.member.id,
+			},
+		});
+
+		await interaction.editOriginalMessage({
+			embeds: [
+				{
+					color: Colors.BLURPLE,
+					title: "Manage Custom Role",
+					description: memberCustomRole
+						? `Your current custom role is: <@&${memberCustomRole.roleID}>`
+						: "You don't have a custom role configured.",
+				},
+			],
+			components: [
+				{
+					type: Constants.ComponentTypes.ACTION_ROW,
+					components: [
+						{
+							type: Constants.ComponentTypes.BUTTON,
+							custom_id: `btn-customrole-${interaction.member.id}-${
+								memberCustomRole ? "edit" : "create"
+							}`,
+							style: Constants.ButtonStyles.PRIMARY,
+							label: memberCustomRole ? "Edit" : "Create",
+						},
+					],
+				},
+			],
 		});
 	}
 }

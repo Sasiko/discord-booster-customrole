@@ -46,6 +46,10 @@ async function execute(
 		case "set-booster-role":
 			await setBoosterRole(interaction, guild, client);
 			break;
+
+		case "create-embed":
+			await createEmbed(interaction, guild, client);
+			break;
 	}
 }
 
@@ -69,6 +73,56 @@ async function setBoosterRole(
 	);
 }
 
+async function createEmbed(
+	interaction: CustomCommandInteraction,
+	guild: Guild,
+	client: CustomClient
+) {
+	const partialChannel = interaction.options.getChannel("channel", true);
+
+	const channel = guild.channels.get(partialChannel.id);
+	if (!channel) return;
+
+	const clientMember = guild.members.get(client.user.id);
+	if (!clientMember) return;
+
+	const permissions = channel.permissionsOf(clientMember);
+
+	if (!permissions.has("viewChannel") || !permissions.has("sendMessages")) {
+		return interaction.editOriginalMessage(
+			getErrorReply(
+				"Bot doesn't have permission to send messages in that channel. Please select a different one."
+			)
+		);
+	}
+
+	await client.createMessage(channel.id, {
+		embed: {
+			color: 0x00ff00,
+			title: "Create/Edit Your Custom Role",
+			description:
+				'Please click on "Create/Edit Role" button below to start the process creating/editing your personal role. Do note that the button has dual functions which is creating new role and edit your existing role. Note that bot will ONLY create 1 role.',
+		},
+		components: [
+			{
+				type: Constants.ComponentTypes.ACTION_ROW,
+				components: [
+					{
+						type: Constants.ComponentTypes.BUTTON,
+						custom_id: "btn-manage-custom-role",
+						style: Constants.ButtonStyles.SUCCESS,
+						label: "Create/Edit Role",
+					},
+				],
+			},
+		],
+	});
+
+	await interaction.editOriginalMessage(
+		getSuccessReply("Embed has been created.")
+	);
+}
+
 export = {
 	execute,
 	options: {
@@ -84,6 +138,20 @@ export = {
 						name: "role",
 						description: "Role in the server",
 						type: Constants.ApplicationCommandOptionTypes.ROLE,
+						required: true,
+					},
+				],
+			},
+			{
+				name: "create-embed",
+				description: "Create an embed to start booster role configuration",
+				type: Constants.ApplicationCommandOptionTypes.SUB_COMMAND,
+				options: [
+					{
+						name: "channel",
+						description: "Channel in the server",
+						type: Constants.ApplicationCommandOptionTypes.CHANNEL,
+						channel_types: [Constants.ChannelTypes.GUILD_TEXT],
 						required: true,
 					},
 				],

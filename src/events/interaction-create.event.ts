@@ -9,7 +9,7 @@ import { CustomRoleService } from "../service/CustomRoleService";
 async function execute(interaction: Interaction, client: CustomClient) {
 	try {
 		if (interaction instanceof ComponentInteraction) {
-			await CustomRoleService.checkButtonClick(interaction);
+			await CustomRoleService.checkButtonClick(interaction, client);
 		}
 
 		if (interaction instanceof ModalSubmitInteraction) {
